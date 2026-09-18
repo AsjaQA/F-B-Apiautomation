@@ -1,0 +1,15 @@
+{
+  "name": "retailcloud-api-test-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated Newman/CI test runner for the retailcloud Catalog and Console API Postman collections",
+  "scripts": {
+    "test": "bash scripts/run-tests.sh",
+    "test:catalog": "bash scripts/run-tests.sh catalog",
+    "test:console": "bash scripts/run-tests.sh console"
+  },
+  "devDependencies": {
+    "newman": "^6.2.1",
+    "newman-reporter-htmlextra": "^1.23.1"
+  }
+}

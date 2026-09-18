@@ -1,0 +1,102 @@
+name: retailcloud API Tests
+
+# Runs the Postman/Newman regression suite for both the Catalog and Console
+# services and publishes an HTML + JSON report for every run.
+#
+# Triggers:
+#   - push to main            : catch regressions as soon as they land
+#   - pull_request             : gate merges on a clean run
+#   - daily schedule (06:00 UTC): catch drift in the live dev/UAT environments
+#   - workflow_dispatch        : run on demand, optionally against one service only
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   CATALOG_BASE_URL        e.g. https://dev-platform.rc.fyi
+#   CATALOG_ACCESS_TOKEN    bearer token for the Catalog Service test account
+#   CONSOLE_BASE_URL        e.g. https://uat-api.retailcloud.com/console
+#   CONSOLE_ACCESS_TOKEN    bearer token for the Console Service test account
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "collections/**"
+      - "environments/**"
+      - "scripts/**"
+      - ".github/workflows/api-tests.yml"
+  pull_request:
+    paths:
+      - "collections/**"
+      - "environments/**"
+      - "scripts/**"
+      - ".github/workflows/api-tests.yml"
+  schedule:
+    # - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Which collections to run"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - catalog
+          - console
+
+jobs:
+  api-tests:
+    name: Run Postman collections (Newman)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run API test suite
+        id: run_tests
+        continue-on-error: true
+        env:
+          CATALOG_BASE_URL: ${{ secrets.CATALOG_BASE_URL }}
+          CATALOG_ACCESS_TOKEN: ${{ secrets.CATALOG_ACCESS_TOKEN }}
+          CONSOLE_BASE_URL: ${{ secrets.CONSOLE_BASE_URL }}
+          CONSOLE_ACCESS_TOKEN: ${{ secrets.CONSOLE_ACCESS_TOKEN }}
+        run: |
+          bash scripts/run-tests.sh "${{ github.event.inputs.scope || 'all' }}"
+
+      - name: Locate latest report folder
+        if: always()
+        id: report_dir
+        run: |
+          latest=$(ls -1 reports | grep -v latest | grep -v .gitkeep | sort | tail -n 1)
+          echo "dir=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Publish job summary
+        if: always()
+        run: |
+          echo "### retailcloud API Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Run: \`${{ steps.report_dir.outputs.dir }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download the full HTML/JSON reports from this run's artifacts (below) for per-request detail." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload HTML + JSON reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-reports-${{ github.run_number }}
+          path: reports/${{ steps.report_dir.outputs.dir }}/
+          retention-days: 30
+
+      - name: Fail the job if any collection failed
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1

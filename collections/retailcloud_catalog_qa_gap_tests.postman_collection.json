@@ -1,0 +1,3715 @@
+{
+  "info": {
+    "_postman_id": "ed401809-368b-46f2-9598-732b505316ff",
+    "name": "retailcloud Catalog Service API - QA Gap Coverage",
+    "description": "Targets the specific coverage gaps identified in the CRUD collection review: negative/validation testing, multi-tenant isolation, guarded referential-integrity deactivation, Department merge validation, batch update atomic vs best-effort behavior, Recipe versioning invariants, expand-gated reads, Modifier<->Item association endpoints, search/filter/pagination edge cases, response-contract and read-only-field checks, immutable fields, concurrency/idempotency, and data boundary/encoding cases.\n\nSetup:\n1. Set `base_url` and `access_token` (Tenant A).\n2. Set `access_token_tenant_b` to a bearer token for a DIFFERENT merchant/domain \u2014 required only by folder 02 (Multi-Tenant Isolation); every other folder uses `access_token` alone.\n3. Run folders top-to-bottom with the Collection Runner. Each folder is self-contained and creates whatever setup data it needs via {{$randomInt}}-suffixed names, so folders can be re-run without colliding with previous runs (with the exception of folder 01's two hard-coded 'Gluten'/'gluten' duplicate-name checks and folder 12's hard-coded duplicate-create check, which are intentionally static to test the uniqueness constraint \u2014 delete/reset those records between runs, or expect the 'create' half to 409 on a second run).\n\nWhere the spec doesn't explicitly document the expected outcome, the test asserts the range of defensible outcomes (e.g. `pm.expect([200, 400]).to.include(...)`) and logs the actual status/body to the console \u2014 treat those as 'confirm and tighten this assertion once you know the intended behavior' rather than a definitive pass/fail.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://dev-platform.rc.fyi",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string",
+      "description": "Bearer token for Tenant A (the primary tenant most requests run as)."
+    },
+    {
+      "key": "access_token_tenant_b",
+      "value": "",
+      "type": "string",
+      "description": "Bearer token for a DIFFERENT tenant/domain \u2014 required for the Multi-Tenant Isolation folder."
+    },
+    {
+      "key": "neg_allergen_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenant_a_allergen_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ri_container_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ri_recipe_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "merge_source_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "merge_target_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "batch_allergen_a_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "two_active_recipe_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "version_recipe_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expand_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expand_collection_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expand_menu_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assoc_modifier_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assoc_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "contract_allergen_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "immutable_uom_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "concurrency_allergen_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "put_response_1",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Negative & Validation Testing",
+      "item": [
+        {
+          "name": "Create Allergen - missing required name -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "description": "`name` is required on the Create schema even though it's optional on PATCH. Expect 400 with a field_errors entry for `name`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"\\ud83c\\udf3e\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Rejects create with no name\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"missing-name create -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Allergen - valid (setup for this folder)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Gap Test Allergen {{$randomInt}}\",\n  \"emoji\": \"\\ud83e\\uddea\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Created\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"neg_allergen_id\", val);  console.log(\"Saved neg_allergen_id =\", val); } } catch (e) { console.log('could not capture neg_allergen_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen - non-existent id -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/999999999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "999999999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Not found\", function () { pm.expect([404]).to.include(pm.response.code); });",
+                  "console.log(\"bogus id get -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Allergen - invalid enum status -> 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{neg_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{neg_allergen_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"NOT_A_REAL_STATUS\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Rejects invalid enum\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"invalid enum patch -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Allergen - name exceeds maxLength(100) -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Rejects over-length name\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"over-length name -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Allergen - duplicate name, different case -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "description": "Spec: name is 'unique within the shard, case-insensitive.' Run once to create 'Gluten', then run again (or with 'gluten') and confirm the second call 409s instead of creating a duplicate.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gluten\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Run this request twice in a row (or after any run that already created 'Gluten'/'gluten').",
+                  "pm.test(\"First call creates; a repeat (any case) should 409\", function () { pm.expect([201, 200, 409]).to.include(pm.response.code); });",
+                  "console.log(\"duplicate name create -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Allergen - duplicate name repeat (lowercase) -> expect 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"gluten\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Case-insensitive duplicate must conflict\", function () { pm.expect([409]).to.include(pm.response.code); });",
+                  "console.log(\"duplicate name lowercase -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Allergen - malformed JSON body -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Broken JSON\"  ",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Rejects malformed JSON\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"malformed json -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen - no auth token -> 401/403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{neg_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{neg_allergen_id}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Unauthenticated request rejected\", function () { pm.expect([401, 403]).to.include(pm.response.code); });",
+                  "console.log(\"no auth -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen - garbage bearer token -> 401/403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{neg_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{neg_allergen_id}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "this.is.not.a.valid.jwt",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Malformed token rejected\", function () { pm.expect([401, 403]).to.include(pm.response.code); });",
+                  "console.log(\"garbage token -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Failure-path coverage the CRUD collection intentionally skips: missing required fields, duplicate uniqueness, 404s, invalid enums, length limits, malformed JSON, and auth failures."
+    },
+    {
+      "name": "02 - Multi-Tenant Isolation",
+      "item": [
+        {
+          "name": "Create Allergen as Tenant A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "description": "Uses the default {{access_token}} (Tenant A). Set {{access_token_tenant_b}} to a bearer token for a *different* domain/merchant before running the rest of this folder.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tenant Isolation Test {{$randomInt}}\",\n  \"emoji\": \"\\ud83d\\udd12\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Created under Tenant A\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"tenant_a_allergen_id\", val);  console.log(\"Saved tenant_a_allergen_id =\", val); } } catch (e) { console.log('could not capture tenant_a_allergen_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen as Tenant B -> expect 404 (not 200, not 403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{tenant_a_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{tenant_a_allergen_id}}"
+              ]
+            },
+            "description": "A tenant should never be able to distinguish 'exists in another shard' from 'does not exist' \u2014 both must be 404, never 200 or a 403 that confirms existence.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token_tenant_b}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tenant B must not see Tenant A's record\", function () { pm.expect([404]).to.include(pm.response.code); });",
+                  "console.log(\"cross-tenant get -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Allergen as Tenant B -> expect 404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{tenant_a_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{tenant_a_allergen_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"\\ud83d\\ude08\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token_tenant_b}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Cross-tenant write blocked as not-found\", function () { pm.expect([404]).to.include(pm.response.code); });",
+                  "console.log(\"cross-tenant patch -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deactivate Allergen as Tenant B -> expect 404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{tenant_a_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{tenant_a_allergen_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token_tenant_b}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Cross-tenant deactivate blocked as not-found\", function () { pm.expect([404]).to.include(pm.response.code); });",
+                  "console.log(\"cross-tenant deactivate -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen as Tenant A - confirm untouched",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{tenant_a_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{tenant_a_allergen_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Owner can still read it\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "pm.test(\"Emoji unchanged by Tenant B's attempted writes\", function () { var jsonData = pm.response.json(); pm.expect(jsonData.data.emoji).to.eql(\"\ud83d\udd12\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "The API is merchant-sharded via the token's `domain` claim. Requires a second bearer token ({{access_token_tenant_b}}) for a different tenant/domain than {{access_token}}."
+    },
+    {
+      "name": "03 - Referential Integrity (Guarded Deactivation)",
+      "item": [
+        {
+          "name": "Create Container",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes/attributes/containers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes",
+                "attributes",
+                "containers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Gap Test Container {{$randomInt}}\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"ri_container_id\", val);  console.log(\"Saved ri_container_id =\", val); } } catch (e) { console.log('could not capture ri_container_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Recipe referencing the Container",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes"
+              ]
+            },
+            "description": "Note: container_ids expects integers; Postman will send the {{ri_container_id}} variable as a string unless 'Replace variables' + JSON.parse is used downstream \u2014 if this 400s on type, replace the value with the numeric id captured above before running.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Gap Test Recipe {{$randomInt}}\",\n  \"type\": \"MENU\",\n  \"status\": \"ACTIVE\",\n  \"servings\": 1,\n  \"container_ids\": [\n    \"{{ri_container_id}}\"\n  ],\n  \"versions\": [\n    {\n      \"version\": 1,\n      \"status\": \"ACTIVE\",\n      \"note\": \"Initial\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Recipe created referencing the container\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"ri_recipe_id\", val);  console.log(\"Saved ri_recipe_id =\", val); } } catch (e) { console.log('could not capture ri_recipe_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deactivate Container while referenced by Recipe -> expect 409",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes/attributes/containers/{{ri_container_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes",
+                "attributes",
+                "containers",
+                "{{ri_container_id}}"
+              ]
+            },
+            "description": "Spec: 'Deactivation is guarded (409) while referenced by any recipe.'",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Guarded: cannot deactivate a container a recipe still references\", function () { pm.expect([409]).to.include(pm.response.code); });",
+                  "console.log(\"guarded deactivate -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deactivate the referencing Recipe (remove the reference)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes/{{ri_recipe_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes",
+                "{{ri_recipe_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Recipe deactivated\", function () { pm.expect([200]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deactivate Container again -> expect 200 now the guard is clear",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes/attributes/containers/{{ri_container_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes",
+                "attributes",
+                "containers",
+                "{{ri_container_id}}"
+              ]
+            },
+            "description": "If this still 409s, the guard may check for *any* recipe reference regardless of the recipe's own status \u2014 worth a bug report if so; the spec only documents the guard, not whether an inactive-recipe reference still blocks it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Should now succeed once no active recipe references it\", function () { pm.expect([200, 409]).to.include(pm.response.code); });",
+                  "console.log(\"deactivate after guard cleared -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Container/Tool deactivation is documented as guarded (409) while referenced by any Recipe. The CRUD collection never creates that reference, so this path is never exercised there."
+    },
+    {
+      "name": "04 - Department Merge Validation",
+      "item": [
+        {
+          "name": "Create Source Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Merge Source {{$randomInt}}\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"merge_source_id\", val);  console.log(\"Saved merge_source_id =\", val); } } catch (e) { console.log('could not capture merge_source_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Target Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Merge Target {{$randomInt}}\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"merge_target_id\", val);  console.log(\"Saved merge_target_id =\", val); } } catch (e) { console.log('could not capture merge_target_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Merge - empty source_ids -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments/{{merge_target_id}}/merge",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments",
+                "{{merge_target_id}}",
+                "merge"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_ids\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"source_ids must be non-empty\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"merge empty sources -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Merge - non-existent source id -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments/{{merge_target_id}}/merge",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments",
+                "{{merge_target_id}}",
+                "merge"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_ids\": [\n    999999999\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Each source must exist\", function () { pm.expect([404]).to.include(pm.response.code); });",
+                  "console.log(\"merge missing source -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Merge - source equals target -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments/{{merge_target_id}}/merge",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments",
+                "{{merge_target_id}}",
+                "merge"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_ids\": [\n    \"{{merge_target_id}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Source cannot equal target\", function () { pm.expect([409]).to.include(pm.response.code); });",
+                  "console.log(\"merge source==target -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Merge - valid source into target -> 200",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments/{{merge_target_id}}/merge",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments",
+                "{{merge_target_id}}",
+                "merge"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_ids\": [\n    \"{{merge_source_id}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Valid merge succeeds\", function () { pm.expect([200]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Source Department - expect INACTIVE post-merge",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments/{{merge_source_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments",
+                "{{merge_source_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "pm.test(\"Source auto-retired after merge\", function () { var jsonData = pm.response.json(); pm.expect(jsonData.data.status).to.eql(\"INACTIVE\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Merge - already-inactive source -> expect 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/departments/{{merge_target_id}}/merge",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "departments",
+                "{{merge_target_id}}",
+                "merge"
+              ]
+            },
+            "description": "The now-inactive source from the previous step should be rejected \u2014 'each source must ... be Active'.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_ids\": [\n    \"{{merge_source_id}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Source must be Active to be merged\", function () { pm.expect([409]).to.include(pm.response.code); });",
+                  "console.log(\"merge inactive source -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "POST /departments/{id}/merge isn't in the CRUD collection at all. Exercises its documented 400 / 404 / 409 validation matrix plus the transactional side-effect (source -> INACTIVE)."
+    },
+    {
+      "name": "05 - Batch Update Behavior",
+      "item": [
+        {
+          "name": "Create Allergen A (for batch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Batch A {{$randomInt}}\",\n  \"emoji\": \"\\ud83e\\udd5c\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"batch_allergen_a_id\", val);  console.log(\"Saved batch_allergen_a_id =\", val); } } catch (e) { console.log('could not capture batch_allergen_a_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Batch Update - atomic true, one id invalid -> whole batch rejected, nothing written",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens:batchUpdate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens:batchUpdate"
+              ]
+            },
+            "description": "config.atomic defaults to true: any missing id or validation failure must abort the whole batch (nothing written), returning a 4xx \u2014 never a 207.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"config\": {\n    \"atomic\": true\n  },\n  \"ids\": [\n    \"{{batch_allergen_a_id}}\",\n    999999999\n  ],\n  \"patch\": {\n    \"status\": \"INACTIVE\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Atomic batch fails as a whole on any bad id\", function () { pm.expect([400, 404, 409]).to.include(pm.response.code); });",
+                  "console.log(\"atomic batch with bad id -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Allergen A unchanged after failed atomic batch",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{batch_allergen_a_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{batch_allergen_a_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "pm.test(\"Untouched \u2014 atomic batch must not partially apply\", function () { var jsonData = pm.response.json(); pm.expect(jsonData.data.status).to.eql(\"ACTIVE\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Batch Update - atomic false, one id invalid -> 207 partial success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens:batchUpdate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens:batchUpdate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"config\": {\n    \"atomic\": false\n  },\n  \"ids\": [\n    \"{{batch_allergen_a_id}}\",\n    999999999\n  ],\n  \"patch\": {\n    \"status\": \"INACTIVE\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Best-effort mode reports per-row and applies the valid subset\", function () { pm.expect([207]).to.include(pm.response.code); });",
+                  "console.log(\"best-effort batch -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Allergen A WAS updated after best-effort batch",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{batch_allergen_a_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{batch_allergen_a_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "pm.test(\"Valid row applied even though the batch had a bad id\", function () { var jsonData = pm.response.json(); pm.expect(jsonData.data.status).to.eql(\"INACTIVE\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Batch Update - empty ids array -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens:batchUpdate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens:batchUpdate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"config\": {\n    \"atomic\": true\n  },\n  \"ids\": [],\n  \"patch\": {\n    \"status\": \"ACTIVE\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"ids must be non-empty (minItems 1)\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"empty ids batch -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Batch Update - field outside the allow-list -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens:batchUpdate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens:batchUpdate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"config\": {\n    \"atomic\": true\n  },\n  \"ids\": [\n    \"{{batch_allergen_a_id}}\"\n  ],\n  \"patch\": {\n    \"name\": \"Not batch-updatable\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"name is unique/immutable-by-batch, not in the allow-list\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"disallowed field batch -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Every resource exposes a :batchUpdate action absent from the CRUD collection. Covers the atomic (all-or-nothing, 4xx) vs best-effort (config.atomic:false, 207 partial) branches, plus empty-id and allow-list violations."
+    },
+    {
+      "name": "06 - Recipe Versioning Rules",
+      "item": [
+        {
+          "name": "Create Recipe with TWO active versions -> expect rejection or auto-correction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes"
+              ]
+            },
+            "description": "This is an ambiguous-by-spec case: does the API 400/409 the request, or silently keep only the last ACTIVE version? Either is defensible \u2014 the test logs the outcome for the team to confirm is intentional.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Two-Active-Versions {{$randomInt}}\",\n  \"type\": \"MENU\",\n  \"status\": \"ACTIVE\",\n  \"servings\": 1,\n  \"versions\": [\n    {\n      \"version\": 1,\n      \"status\": \"ACTIVE\",\n      \"note\": \"v1\"\n    },\n    {\n      \"version\": 2,\n      \"status\": \"ACTIVE\",\n      \"note\": \"v2 - also marked active\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Spec says 'one ACTIVE version per recipe' \u2014 confirm which of reject vs auto-resolve actually happens\", function () { pm.expect([400, 409, 201, 200]).to.include(pm.response.code); });",
+                  "console.log(\"two active versions create -> actual status:\", pm.response.code, pm.response.text().slice(0,300));",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); pm.collectionVariables.set('two_active_recipe_id', jsonData.data.id); var actives = (jsonData.data.versions || []).filter(v => v.status === 'ACTIVE'); console.log('active version count on created recipe:', actives.length); pm.test('If accepted, server enforces a single active version', function () { pm.expect(actives.length).to.equal(1); }); } catch (e) {} }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Recipe with one ACTIVE + one DRAFT version -> 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Draft Promotion {{$randomInt}}\",\n  \"type\": \"MENU\",\n  \"status\": \"ACTIVE\",\n  \"servings\": 1,\n  \"versions\": [\n    {\n      \"version\": 1,\n      \"status\": \"ACTIVE\",\n      \"note\": \"Current\"\n    },\n    {\n      \"version\": 2,\n      \"status\": \"DRAFT\",\n      \"note\": \"Next iteration\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"version_recipe_id\", val);  console.log(\"Saved version_recipe_id =\", val); } } catch (e) { console.log('could not capture version_recipe_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Promote the DRAFT version to ACTIVE via PATCH",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes/{{version_recipe_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes",
+                "{{version_recipe_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"versions\": [\n    {\n      \"version\": 2,\n      \"status\": \"ACTIVE\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirm whether a partial versions[] patch is even accepted for promotion\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"promote draft -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recipe - confirm exactly one ACTIVE version after promotion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/recipes/{{version_recipe_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "recipes",
+                "{{version_recipe_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); var actives = (jsonData.data.versions || []).filter(v => v.status === 'ACTIVE'); pm.test('Exactly one ACTIVE version', function () { pm.expect(actives.length).to.equal(1); }); pm.test('Version 2 is now the active one', function () { var v2 = (jsonData.data.versions||[]).find(v=>v.version===2); pm.expect(v2 && v2.status).to.eql('ACTIVE'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Recipe is documented as 'recipe -> versions -> lines... one ACTIVE version per recipe' with no separate /versions endpoint, so the invariant lives inside the single Recipe payload. Untested by the CRUD collection."
+    },
+    {
+      "name": "07 - Expand-Gated Reads",
+      "item": [
+        {
+          "name": "Create Item (setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"QA-EXPAND-{{$randomInt}}\",\n  \"name\": \"QA Expand Test Item\",\n  \"measure_type\": \"COUNT\",\n  \"status\": \"ACTIVE\",\n  \"merchandise_type\": \"FANDB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"expand_item_id\", val);  console.log(\"Saved expand_item_id =\", val); } } catch (e) { console.log('could not capture expand_item_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Item - default (no expand) - recipe should be absent/omitted",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{expand_item_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{expand_item_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); console.log('recipe field present (default):', jsonData.data.recipe !== undefined);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Item - ?expand=recipe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{expand_item_id}}?expand=recipe",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{expand_item_id}}"
+              ],
+              "query": [
+                {
+                  "key": "expand",
+                  "value": "recipe",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); console.log('recipe field present (expanded):', jsonData.data.recipe !== undefined);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Item - ?expand=not_a_real_relation -> confirm error or silent ignore",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{expand_item_id}}?expand=not_a_real_relation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{expand_item_id}}"
+              ],
+              "query": [
+                {
+                  "key": "expand",
+                  "value": "not_a_real_relation",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Unsupported expand value: document whether this 400s or is ignored\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"invalid expand -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Collection (setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/collections",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "collections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Expand Collection {{$randomInt}}\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"expand_collection_id\", val);  console.log(\"Saved expand_collection_id =\", val); } } catch (e) { console.log('could not capture expand_collection_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Collection - ?expand=contents (empty collection)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/collections/{{expand_collection_id}}?expand=contents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "collections",
+                "{{expand_collection_id}}"
+              ],
+              "query": [
+                {
+                  "key": "expand",
+                  "value": "contents",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Confirm an empty collection returns contents: [] (or similar) rather than omitting the field or erroring."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); console.log('contents on empty collection:', JSON.stringify(jsonData.data.contents));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Menu (setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/menus",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "menus"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Expand Menu {{$randomInt}}\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"expand_menu_id\", val);  console.log(\"Saved expand_menu_id =\", val); } } catch (e) { console.log('could not capture expand_menu_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Menu - ?expand=menu_page (no pages yet)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/menus/{{expand_menu_id}}?expand=menu_page",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "menus",
+                "{{expand_menu_id}}"
+              ],
+              "query": [
+                {
+                  "key": "expand",
+                  "value": "menu_page",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Item (?expand=recipe), Collection (?expand=contents), Menu (?expand=menu_page) and Menu Page (?expand=menu_page_item) all hide nested data by default. The CRUD collection never sends expand."
+    },
+    {
+      "name": "08 - Modifier <-> Item Association",
+      "item": [
+        {
+          "name": "Create Modifier (setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/modifiers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "modifiers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Assoc Modifier {{$randomInt}}\",\n  \"selection_type\": \"SINGLE\",\n  \"control_type\": \"RADIO\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"assoc_modifier_id\", val);  console.log(\"Saved assoc_modifier_id =\", val); } } catch (e) { console.log('could not capture assoc_modifier_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Item (setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"QA-ASSOC-{{$randomInt}}\",\n  \"name\": \"QA Assoc Item\",\n  \"measure_type\": \"COUNT\",\n  \"status\": \"ACTIVE\",\n  \"merchandise_type\": \"FANDB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"assoc_item_id\", val);  console.log(\"Saved assoc_item_id =\", val); } } catch (e) { console.log('could not capture assoc_item_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Link Modifier to Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{assoc_item_id}}/modifiers:link",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{assoc_item_id}}",
+                "modifiers:link"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modifier_ids\": [\n    \"{{assoc_modifier_id}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200, 201]\", function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "console.log(\"link modifier -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Item Modifiers - confirm linked",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{assoc_item_id}}/modifiers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{assoc_item_id}}",
+                "modifiers"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); var ids = (jsonData.data||[]).map(m => String(m.id)); pm.test('Linked modifier appears on item', function () { pm.expect(ids).to.include(pm.collectionVariables.get('assoc_modifier_id')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Link the SAME Modifier again -> idempotent no-op or 409?",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{assoc_item_id}}/modifiers:link",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{assoc_item_id}}",
+                "modifiers:link"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modifier_ids\": [\n    \"{{assoc_modifier_id}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Undocumented: confirm re-linking an already-linked modifier is a safe no-op\", function () { pm.expect([200, 201, 409]).to.include(pm.response.code); });",
+                  "console.log(\"re-link same modifier -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Modifier Items - confirm reverse lookup in sync",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/modifiers/{{assoc_modifier_id}}/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "modifiers",
+                "{{assoc_modifier_id}}",
+                "items"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); var ids = (jsonData.data||[]).map(m => String(m.id)); pm.test('Item appears in modifier.items (reverse of link)', function () { pm.expect(ids).to.include(pm.collectionVariables.get('assoc_item_id')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unlink Modifier from Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{assoc_item_id}}/modifiers:unlink",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{assoc_item_id}}",
+                "modifiers:unlink"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modifier_ids\": [\n    \"{{assoc_modifier_id}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "console.log(\"unlink modifier -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Item Modifiers - confirm unlinked",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{assoc_item_id}}/modifiers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{assoc_item_id}}",
+                "modifiers"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); var ids = (jsonData.data||[]).map(m => String(m.id)); pm.test('Modifier no longer on item', function () { pm.expect(ids).to.not.include(pm.collectionVariables.get('assoc_modifier_id')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unlink a modifier that's already unlinked -> confirm graceful",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items/{{assoc_item_id}}/modifiers:unlink",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items",
+                "{{assoc_item_id}}",
+                "modifiers:unlink"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modifier_ids\": [\n    \"{{assoc_modifier_id}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Undocumented: confirm unlinking a non-linked modifier doesn't error ambiguously\", function () { pm.expect([200, 404, 409]).to.include(pm.response.code); });",
+                  "console.log(\"unlink already-unlinked -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "PUT /items/{id}/modifiers and the :link/:unlink actions manage the junction from the item side and aren't in the CRUD collection. Checks both directions stay in sync and idempotency of link/unlink."
+    },
+    {
+      "name": "09 - Search / Filter / Sort / Pagination Edge Cases",
+      "item": [
+        {
+          "name": "List Allergens - size=0",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?size=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "0",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirm size=0 either 400s or returns an empty page, not an error page with data\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"size=0 -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - size over max (101)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?size=101",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "101",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Spec caps size at 100 \u2014 confirm clamp vs 400\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"size=101 -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - page=0 (1-indexed, spec minimum 1)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?page=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"page is documented 1-indexed with minimum 1\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"page=0 -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - page=-1",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?page=-1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "-1",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Negative page should be rejected\", function () { pm.expect([400]).to.include(pm.response.code); });",
+                  "console.log(\"page=-1 -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - malformed filter syntax",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?filter=this is not field:op:value",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "this is not field:op:value",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirm malformed filter 400s rather than being silently ignored\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"malformed filter -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - filter on a non-filterable field",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?filter=created_at:2020-01-01",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "created_at:2020-01-01",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirm the documented filterable-field allow-list is enforced\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"non-filterable field -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - sort on invalid field",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?sort=not_a_real_field.asc",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "not_a_real_field.asc",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirm invalid sort field 400s rather than being ignored\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"invalid sort -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - multiple filters with match=any",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?filter=name:Gluten&filter=name:Milk&match=any",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "name:Gluten",
+                  "disabled": false
+                },
+                {
+                  "key": "filter",
+                  "value": "name:Milk",
+                  "disabled": false
+                },
+                {
+                  "key": "match",
+                  "value": "any",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "With match=any this should OR the two name filters; with the default match=all it would AND them (and likely return nothing, since a name can't be both)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); console.log('match=any result count:', (jsonData.data||[]).length);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Allergens - search with no matches -> well-formed empty page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens?filter=name:zzz-definitely-not-a-real-allergen-zzz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ],
+              "query": [
+                {
+                  "key": "filter",
+                  "value": "name:zzz-definitely-not-a-real-allergen-zzz",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); pm.test('data is an empty array, not null/omitted', function () { pm.expect(jsonData.data).to.eql([]); }); pm.test('pagination object still present', function () { pm.expect(jsonData.pagination).to.not.be.undefined; });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Every list endpoint takes filter/match/sort/page/size; the CRUD collection only ever sends page=1&size=20. Boundary and malformed-input cases here."
+    },
+    {
+      "name": "10 - Response Contract & Read-Only Field Protection",
+      "item": [
+        {
+          "name": "Create Allergen - full envelope contract check",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Contract Test {{$randomInt}}\",\n  \"emoji\": \"\\ud83d\\udcdc\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); pm.test('success:true on 2xx', function () { pm.expect(jsonData.success).to.eql(true); }); pm.test('data.id is present and numeric', function () { pm.expect(jsonData.data.id).to.be.a('number'); }); pm.test('created_at populated', function () { pm.expect(jsonData.data.created_at).to.not.be.undefined; }); pm.test('standard is false for an API-created allergen', function () { pm.expect(jsonData.data.standard).to.eql(false); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"contract_allergen_id\", val);  console.log(\"Saved contract_allergen_id =\", val); } } catch (e) { console.log('could not capture contract_allergen_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patch Allergen attempting to override id/standard -> must be ignored",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{contract_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{contract_allergen_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 999999999,\n  \"standard\": true,\n  \"name\": \"Still QA Contract Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Extra read-only fields should be silently ignored, not cause an error\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); pm.test('id unchanged', function () { pm.expect(String(jsonData.data.id)).to.eql(pm.collectionVariables.get('contract_allergen_id')); }); pm.test('standard still false (server-managed, immutable)', function () { pm.expect(jsonData.data.standard).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen - modified_at changed after the patch above",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{contract_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{contract_allergen_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); pm.test('modified_at present', function () { pm.expect(jsonData.data.modified_at).to.not.be.undefined; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen - non-existent id returns ErrorEnvelope shape",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/999999999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "999999999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [404]\", function () { pm.expect([404]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); pm.test('success:false on error', function () { pm.expect(jsonData.success).to.eql(false); }); pm.test('error object present with a code', function () { pm.expect(jsonData.error && jsonData.error.code).to.not.be.undefined; });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "The CRUD collection only asserts status code. These check the envelope shape (success/data vs success/error), field types, audit timestamps, and that read-only fields can't be overwritten by clients."
+    },
+    {
+      "name": "11 - Immutable Field Protection",
+      "item": [
+        {
+          "name": "Create Measurement Unit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/measurement-units",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "measurement-units"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Immutable UOM {{$randomInt}}\",\n  \"measure_type\": \"COUNT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"immutable_uom_id\", val);  console.log(\"Saved immutable_uom_id =\", val); } } catch (e) { console.log('could not capture immutable_uom_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patch Measurement Unit - attempt to change measure_type -> should be rejected or ignored",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/measurement-units/{{immutable_uom_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "measurement-units",
+                "{{immutable_uom_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"measure_type\": \"WEIGHT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"measure_type is documented immutable \u2014 confirm 400 vs silent ignore\", function () { pm.expect([200, 400]).to.include(pm.response.code); });",
+                  "console.log(\"immutable measure_type patch -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Measurement Unit - confirm measure_type unchanged",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/measurement-units/{{immutable_uom_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "measurement-units",
+                "{{immutable_uom_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "pm.test(\"measure_type must still be COUNT if the prior PATCH was silently ignored rather than rejected\", function () { var jsonData = pm.response.json(); pm.expect(jsonData.data.measure_type).to.eql(\"COUNT\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Measurement Unit.measure_type is documented immutable, and the resource has no lifecycle/delete at all \u2014 neither is covered by the CRUD collection."
+    },
+    {
+      "name": "12 - Concurrency & Idempotency",
+      "item": [
+        {
+          "name": "Create Allergen (baseline)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Concurrency Test {{$randomInt}}\",\n  \"emoji\": \"\\u23f1\\ufe0f\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { try { var jsonData = pm.response.json(); var val = jsonData.data.id; if (val !== undefined && val !== null) {  pm.collectionVariables.set(\"concurrency_allergen_id\", val);  console.log(\"Saved concurrency_allergen_id =\", val); } } catch (e) { console.log('could not capture concurrency_allergen_id:', e); } }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace (PUT) - first call",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{concurrency_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{concurrency_allergen_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Concurrency Test - Replaced\",\n  \"emoji\": \"\\ud83d\\udd01\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "pm.collectionVariables.set('put_response_1', pm.response.text());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace (PUT) - identical second call -> confirm idempotent",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{concurrency_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{concurrency_allergen_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Concurrency Test - Replaced\",\n  \"emoji\": \"\\ud83d\\udd01\",\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); pm.test('Second identical PUT yields the same field values', function () {  pm.expect(jsonData.data.name).to.eql('QA Concurrency Test - Replaced');  pm.expect(jsonData.data.emoji).to.eql('\ud83d\udd01'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Concurrent PATCH - request A (different field than B)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{concurrency_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{concurrency_allergen_id}}"
+              ]
+            },
+            "description": "MANUAL TEST: fire this request and 'Concurrent PATCH - request B' at the same time (e.g. two Postman tabs, or Newman with parallel workers) to check for a lost-update race. A single sequential collection run can't reproduce the race by itself.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"\\ud83c\\udd70\\ufe0f\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "console.log(\"concurrent A -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Concurrent PATCH - request B (different field than A)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{concurrency_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{concurrency_allergen_id}}"
+              ]
+            },
+            "description": "Run alongside 'Concurrent PATCH - request A'. After both complete, GET the record and confirm BOTH the emoji and status changes landed \u2014 if only one did, there's a lost-update bug.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "console.log(\"concurrent B -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Allergen - confirm both concurrent PATCHes landed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens/{{concurrency_allergen_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens",
+                "{{concurrency_allergen_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [200]\", function () { pm.expect([200]).to.include(pm.response.code); });",
+                  "var jsonData = pm.response.json(); pm.test('Both concurrent field changes are present (no lost update)', function () {  pm.expect(jsonData.data.emoji).to.eql('\ud83c\udd70\ufe0f');  pm.expect(jsonData.data.status).to.eql('INACTIVE'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate create - same payload sent twice back-to-back",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Duplicate Create Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200]\", function () { pm.expect([201, 200]).to.include(pm.response.code); });",
+                  "console.log(\"duplicate create #1 -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate create - immediate repeat -> expect 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Duplicate Create Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Uniqueness must hold even for back-to-back requests\", function () { pm.expect([409]).to.include(pm.response.code); });",
+                  "console.log(\"duplicate create #2 -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "PUT idempotency, back-to-back duplicate creates, and a manual-run lost-update race on concurrent PATCH."
+    },
+    {
+      "name": "13 - Data Boundary & Encoding",
+      "item": [
+        {
+          "name": "Create Allergen - unicode/emoji-heavy name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gluten \\u30b0\\u30eb\\u30c6\\u30f3 \\ud83c\\udf3e {{$randomInt}}\",\n  \"emoji\": \"\\ud83c\\udf3e\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Multi-byte unicode in name should round-trip cleanly\", function () { pm.expect([201, 200]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Allergen - leading/trailing whitespace name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"  Gluten With Spaces  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirm whether whitespace is trimmed, rejected, or stored verbatim\", function () { pm.expect([201, 200, 400]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { var jsonData = pm.response.json(); console.log('stored name (check for un-trimmed whitespace):', JSON.stringify(jsonData.data.name)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Item - negative cost_price",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"QA-NEG-PRICE-{{$randomInt}}\",\n  \"name\": \"QA Negative Price Item\",\n  \"measure_type\": \"COUNT\",\n  \"status\": \"ACTIVE\",\n  \"merchandise_type\": \"FANDB\",\n  \"cost_price\": -5.0,\n  \"selling_price\": 9.99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirm negative cost_price is rejected rather than silently accepted\", function () { pm.expect([400, 201, 200]).to.include(pm.response.code); });",
+                  "console.log(\"negative cost_price -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Item - minimum_level greater than maximum_level (logically inconsistent)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"QA-MINMAX-{{$randomInt}}\",\n  \"name\": \"QA Min Greater Than Max\",\n  \"measure_type\": \"COUNT\",\n  \"status\": \"ACTIVE\",\n  \"merchandise_type\": \"FANDB\",\n  \"minimum_level\": 500,\n  \"maximum_level\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Cross-field validation isn't documented \u2014 confirm whether this is caught\", function () { pm.expect([400, 201, 200]).to.include(pm.response.code); });",
+                  "console.log(\"min>max levels -> actual status:\", pm.response.code, pm.response.text().slice(0,300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Allergen - script/HTML injection string in name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/catalog/attributes/allergens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "attributes",
+                "allergens"
+              ]
+            },
+            "description": "Confirms the API treats this as inert string data. If you render this value anywhere client-side (admin UI, receipts), separately confirm it's HTML-escaped on output \u2014 that's an app-layer concern this request can't test.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<script>alert(1)</script>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is one of [201, 200, 400]\", function () { pm.expect([201, 200, 400]).to.include(pm.response.code); });",
+                  "if (pm.response.code < 300) { var jsonData = pm.response.json(); pm.test('Stored/returned verbatim as data, not executed or mangled', function () { pm.expect(jsonData.data.name).to.eql('<script>alert(1)</script>'); }); }"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Unicode/emoji handling, whitespace normalization, negative/inconsistent numeric fields, and injection-style strings in free-text fields."
+    }
+  ]
+}

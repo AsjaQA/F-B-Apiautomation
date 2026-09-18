@@ -1,0 +1,7 @@
+node_modules/
+reports/*
+!reports/.gitkeep
+
+# Never commit a real access_token. Only environments/*.postman_environment.json
+# files with the placeholder "REPLACE_WITH_BEARER_TOKEN" should be tracked.
+*.local.postman_environment.json
