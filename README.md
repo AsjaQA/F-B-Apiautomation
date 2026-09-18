@@ -110,7 +110,7 @@ and variables → Actions → New repository secret**):
 |---|---|
 | `CATALOG_BASE_URL` | `https://dev-platform.rc.fyi` |
 | `CATALOG_ACCESS_TOKEN` | bearer token for a Catalog test account |
-| `CONSOLE_BASE_URL` | `https://uat-api.retailcloud.com/console` |
+| `CONSOLE_BASE_URL` | `https://dev-platform.rc.fyi` |
 | `CONSOLE_ACCESS_TOKEN` | bearer token for a Console test account |
 
 Every run uploads the HTML + JSON reports as a downloadable artifact

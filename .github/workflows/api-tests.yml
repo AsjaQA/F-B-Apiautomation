@@ -12,7 +12,7 @@ name: retailcloud API Tests
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   CATALOG_BASE_URL        e.g. https://dev-platform.rc.fyi
 #   CATALOG_ACCESS_TOKEN    bearer token for the Catalog Service test account
-#   CONSOLE_BASE_URL        e.g. https://uat-api.retailcloud.com/console
+#   CONSOLE_BASE_URL        e.g. https://dev-platform.rc.fyi
 #   CONSOLE_ACCESS_TOKEN    bearer token for the Console Service test account
  
 on:
